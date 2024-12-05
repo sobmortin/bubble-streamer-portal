@@ -1,7 +1,7 @@
 <template>
     <div class="container">
         <div class="input-container">
-            <input v-model="currentItem" type="text" placeholder="Enter item name" class="item-input" />
+            <!-- <input v-model="currentItem" type="text" placeholder="Enter item name" class="item-input" /> -->
             <button @click="captureAndProcess" class="capture-button">Capture Screenshot</button>
         </div>
 
@@ -25,11 +25,15 @@
             </div>
         </div>
 
+        <ItemDetails v-if="showItemDetailsBox" @emit-item-details="handleItemDetails" />
+
         <div class="items-list">
             <h3>Marked Items:</h3>
             <ul>
                 <li v-for="(item, index) in items" :key="index" class="item-entry">
-                    <span class="item-name">{{ item.name }}</span>
+                    <span class="item-name">{{ item.itemName }}</span>
+                    <span class="item-name">{{ item.itemUrl }}</span>
+
                     <div class="item-details">
                         <span class="coordinates">
                             X: {{ item.position.x.toFixed(5) }}%, Y: {{ item.position.y.toFixed(5) }}%
@@ -48,8 +52,10 @@
 
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { useLoaderStore } from '~/store/loader'
+const loaderStore = useLoaderStore()
 
-const currentItem = ref('')
+let currentItem = ref({})
 const items = ref([])
 const videoRef = ref(null)
 const canvasRef = ref(null)
@@ -58,6 +64,7 @@ const stream = ref(null)
 const screenshotTaken = ref(false)
 const screenshotUrl = ref('')
 const screenshotBlob = ref(null)
+let showItemDetailsBox = ref(false)
 
 onMounted(async () => {
     await startWebcam()
@@ -124,30 +131,38 @@ async function captureAndProcess() {
     )
 }
 
-function handleImageClick(e) {
-    if (!currentItem.value) {
-        alert('Please enter an item name first!')
-        return
-    }
+function handleItemDetails(itemDetails) {
+    console.log('handling')
+    currentItem = { ...currentItem, ...itemDetails }
+    items.value.push(currentItem)
+    console.log({ currentItem, items })
+    currentItem.value = {}
+    showItemDetailsBox.value = false
+}
 
+function handleImageClick(e) {
+    currentItem = {}
+    console.log(currentItem)
     const rect = e.target.getBoundingClientRect()
     // Adjust for the transform translate(-50%, -50%) of the marker
     const x = ((e.clientX - rect.left) / rect.width) * 100
     const y = ((e.clientY - rect.top) / rect.height) * 100
 
-    items.value.push({
-        name: currentItem.value,
+    currentItem = {
         position: {
             x: x,
             y: y,
         },
-    })
-
-    currentItem.value = ''
+    }
+    console.log({ currentItem })
+    showItemDetailsBox.value = true
+    console.log(showItemDetailsBox)
+    
 }
 
 async function saveToBackend() {
     try {
+        loaderStore.setShowLoaderTrue()
         const formData = new FormData()
         formData.append('image', screenshotBlob.value)
         formData.append(
@@ -157,13 +172,14 @@ async function saveToBackend() {
             })
         )
 
-        console.log({formData})
+        console.log({ formData, loaderStore })
         const response = await fetch('http://localhost:8000/save-image', {
             method: 'POST',
             body: formData,
         })
 
         if (!response.ok) {
+            console.log(response)
             throw new Error('Network response was not ok')
         }
 
@@ -171,6 +187,8 @@ async function saveToBackend() {
     } catch (error) {
         console.error('Error sending data:', error)
         alert('Error saving data to server')
+    } finally {
+        loaderStore.setShowLoaderFalse()
     }
 }
 
@@ -207,6 +225,7 @@ function deleteItem(index) {
     border: none;
     border-radius: 4px;
     cursor: pointer;
+    width: 100%;
 }
 
 .video-container {
