@@ -1,6 +1,6 @@
 <template>
     <div class="input-box">
-        <form>
+        <div>
             <p>item name:</p>
             <input type="text" v-model="itemName" />
 
@@ -12,7 +12,7 @@
             <div style="text-align: center">
                 <button @click="emitItemDetails">Save</button>
             </div>
-        </form>
+        </div>
     </div>
 </template>
 
@@ -31,8 +31,6 @@ const emitItemDetails = () => {
         itemDescription,
     })
 }
-
-
 </script>
 <style>
 .input-box {

@@ -1,15 +1,18 @@
 import { defineStore } from 'pinia'
-import { reactive, ref } from 'vue'
 
-export const useLoaderStore = defineStore('loaderStore', () => {
-    const state = ref(false)
-
-    const setShowLoaderTrue = () => {
-        state.value = true
-    }
-
-    const setShowLoaderFalse = () => {
-        state.value = false
-    }
-    return { state, setShowLoaderTrue, setShowLoaderFalse }
+export const useLoaderStore = defineStore('loaderStore', {
+    state: () => ({
+        isLoading: false,
+    }),
+    getters: {
+        getLoadingState: (state) => state.isLoading,
+    },
+    actions: {
+        setShowLoaderTrue() {
+            this.isLoading = true
+        },
+        setShowLoaderFalse() {
+            this.isLoading = false
+        },
+    },
 })

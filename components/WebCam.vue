@@ -1,7 +1,6 @@
 <template>
     <div class="container">
         <div class="input-container">
-            <!-- <input v-model="currentItem" type="text" placeholder="Enter item name" class="item-input" /> -->
             <button @click="captureAndProcess" class="capture-button">Capture Screenshot</button>
         </div>
 
@@ -11,8 +10,8 @@
             <div v-if="screenshotTaken" class="screenshot-overlay">
                 <img :src="screenshotUrl" @click="handleImageClick" />
                 <div
-                    v-for="item in items"
-                    :key="item.name + item.position.x"
+                    v-for="(item, index) in items"
+                    :key="index"
                     class="marker"
                     :style="{
                         left: item.position.x + '%',
@@ -20,7 +19,6 @@
                     }"
                 >
                     <div class="marker-dot"></div>
-                    <div class="marker-label">{{ item.name }}</div>
                 </div>
             </div>
         </div>
@@ -29,33 +27,44 @@
 
         <div class="items-list">
             <h3>Marked Items:</h3>
-            <ul>
-                <li v-for="(item, index) in items" :key="index" class="item-entry">
-                    <span class="item-name">{{ item.itemName }}</span>
-                    <span class="item-name">{{ item.itemUrl }}</span>
-
-                    <div class="item-details">
-                        <span class="coordinates">
-                            X: {{ item.position.x.toFixed(5) }}%, Y: {{ item.position.y.toFixed(5) }}%
+            <form @submit.prevent="saveToBackend">
+                <ul>
+                    <li v-for="(item, index) in items" :key="index" class="item-entry">
+                        <span class="item-name">{{ item.itemName }}</span>
+                        <span class="item-name">
+                            <a :href="item.itemUrl">view product link</a>
                         </span>
-                        <button @click="deleteItem(index)" class="delete-button">Delete</button>
-                    </div>
-                </li>
-            </ul>
-        </div>
 
-        <button v-if="screenshotTaken && items.length > 0" @click="saveToBackend" class="save-button">
-            Save All Items
-        </button>
+                        <div class="item-details">
+                            <span class="coordinates">
+                                X: {{ item.position.x.toFixed(5) }}%, Y: {{ item.position.y.toFixed(5) }}%
+                            </span>
+                            <button type="button" @click="deleteItem(index)" class="delete-button">Delete</button>
+                        </div>
+                    </li>
+                </ul>
+                <button v-if="screenshotTaken && items.length > 0" type="submit" class="save-button">
+                    Save All Items
+                </button>
+            </form>
+        </div>
+        <div v-if="savedMasks">
+            <MaskSelector />
+        </div>
     </div>
 </template>
 
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue'
-import { useLoaderStore } from '~/store/loader'
-const loaderStore = useLoaderStore()
+import { useLoaderStore } from '@/store/loader.js'
+import { useSavedMasksStore } from '@/store/savedMasks.js'
 
-let currentItem = ref({})
+const loaderStore = useLoaderStore()
+const savedMaskStore = useSavedMasksStore()
+
+const { savedMasks } = storeToRefs(savedMaskStore)
+
+const currentItem = ref({})
 const items = ref([])
 const videoRef = ref(null)
 const canvasRef = ref(null)
@@ -64,7 +73,7 @@ const stream = ref(null)
 const screenshotTaken = ref(false)
 const screenshotUrl = ref('')
 const screenshotBlob = ref(null)
-let showItemDetailsBox = ref(false)
+const showItemDetailsBox = ref(false)
 
 onMounted(async () => {
     await startWebcam()
@@ -115,7 +124,6 @@ async function captureAndProcess() {
     const ctx = canvas.getContext('2d')
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
 
-    // Convert to JPG blob
     canvas.toBlob(
         async (blob) => {
             screenshotBlob.value = blob
@@ -124,7 +132,7 @@ async function captureAndProcess() {
             }
             screenshotUrl.value = URL.createObjectURL(blob)
             screenshotTaken.value = true
-            items.value = [] // Clear previous items
+            items.value = []
         },
         'image/jpeg',
         0.9
@@ -132,58 +140,42 @@ async function captureAndProcess() {
 }
 
 function handleItemDetails(itemDetails) {
-    console.log('handling')
-    currentItem = { ...currentItem, ...itemDetails }
-    items.value.push(currentItem)
-    console.log({ currentItem, items })
+    const newItem = { ...currentItem.value, ...itemDetails }
+    items.value.push(newItem)
     currentItem.value = {}
     showItemDetailsBox.value = false
 }
 
 function handleImageClick(e) {
-    currentItem = {}
-    console.log(currentItem)
+    currentItem.value = {}
     const rect = e.target.getBoundingClientRect()
-    // Adjust for the transform translate(-50%, -50%) of the marker
     const x = ((e.clientX - rect.left) / rect.width) * 100
     const y = ((e.clientY - rect.top) / rect.height) * 100
 
-    currentItem = {
+    currentItem.value = {
         position: {
             x: x,
             y: y,
         },
     }
-    console.log({ currentItem })
     showItemDetailsBox.value = true
-    console.log(showItemDetailsBox)
-    
 }
 
 async function saveToBackend() {
     try {
         loaderStore.setShowLoaderTrue()
         const formData = new FormData()
-        formData.append('image', screenshotBlob.value)
-        formData.append(
-            'data',
-            JSON.stringify({
-                items: items.value,
-            })
-        )
+        console.log({ uff: screenshotBlob.value })
 
-        console.log({ formData, loaderStore })
-        const response = await fetch('http://localhost:8000/save-image', {
+        formData.append('image', screenshotBlob.value, 'screenshot.png')
+        formData.append('data', JSON.stringify({ items: items.value }))
+
+        const response = await $fetch('/api/bubble-api/get-masks', {
             method: 'POST',
             body: formData,
         })
-
-        if (!response.ok) {
-            console.log(response)
-            throw new Error('Network response was not ok')
-        }
-
-        alert('Data saved successfully!')
+        console.log({ response })
+        savedMaskStore.setSavedMasks(response)
     } catch (error) {
         console.error('Error sending data:', error)
         alert('Error saving data to server')
